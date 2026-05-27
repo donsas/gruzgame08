@@ -1,42 +1,70 @@
-'use client'
+"use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import sdk from '@farcaster/miniapp-sdk';
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import sdk from "@farcaster/miniapp-sdk";
 
 interface MiniAppContextValue {
   context: Awaited<typeof sdk.context> | null;
   isReady: boolean;
+  isInMiniApp: boolean | null;
 }
 
-export const MiniAppContext = createContext<MiniAppContextValue | null>(null);
+export const MiniAppContext = createContext<MiniAppContextValue>({
+  context: null,
+  isReady: false,
+  isInMiniApp: null,
+});
 
 export function useMiniApp() {
-  const context = useContext(MiniAppContext);
-  if (!context) {
-    throw new Error('useMiniApp must be used within MiniAppProvider');
+  return useContext(MiniAppContext);
+}
+
+async function signalMiniAppReady() {
+  try {
+    const isInApp = await sdk.isInMiniApp();
+    if (isInApp) {
+      await sdk.actions.ready();
+    }
+  } catch {
+    // Safe no-op outside Base App.
   }
-  return context;
 }
 
 export function MiniAppProvider({ children }: { children: ReactNode }) {
   const [context, setContext] = useState<Awaited<typeof sdk.context> | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isInMiniApp, setIsInMiniApp] = useState<boolean | null>(null);
 
   useEffect(() => {
     const init = async () => {
-      const isInApp = await sdk.isInMiniApp();
-      if (isInApp) {
-        const ctx = await sdk.context;
-        setContext(ctx);
-        await sdk.actions.ready();
+      try {
+        const inApp = await sdk.isInMiniApp();
+        setIsInMiniApp(inApp);
+        if (inApp) {
+          setContext(await sdk.context);
+        }
+        await signalMiniAppReady();
+      } catch {
+        setIsInMiniApp(false);
+      } finally {
         setIsReady(true);
       }
     };
-    init();
+
+    void init();
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void signalMiniAppReady();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   return (
-    <MiniAppContext.Provider value={{ context, isReady }}>
+    <MiniAppContext.Provider value={{ context, isReady, isInMiniApp }}>
       {children}
     </MiniAppContext.Provider>
   );

@@ -1,36 +1,13 @@
 "use client";
-import { ReactNode, useState } from "react";
-import { base } from "wagmi/chains";
-import { createConfig, createStorage, cookieStorage, http, WagmiProvider } from "wagmi";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { baseAccount, injected } from "wagmi/connectors";
-import { MiniAppProvider } from "./providers/MiniAppProvider";
 
-const config = createConfig({
-  chains: [base],
-  connectors: [
-    injected({ target: "rabby" }),
-    injected({ target: "metaMask" }),
-    injected(),
-    baseAccount({
-      appName: "Medieval Donkey Tap",
-    }),
-  ],
-  storage: createStorage({ storage: cookieStorage }),
-  ssr: true,
-  transports: { [base.id]: http() },
-});
+import { ReactNode } from "react";
+import { MiniAppProvider } from "./providers/MiniAppProvider";
+import { WagmiEnvProvider } from "./providers/WagmiEnvProvider";
 
 export function Providers({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
-
   return (
     <MiniAppProvider>
-      <WagmiProvider config={config}>
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      </WagmiProvider>
+      <WagmiEnvProvider>{children}</WagmiEnvProvider>
     </MiniAppProvider>
   );
 }

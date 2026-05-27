@@ -1,18 +1,7 @@
 import { encodeFunctionData } from "viem";
-import { Attribution } from "ox/erc8021";
 
-const builderCode = process.env.NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE?.trim();
-const explicitSuffix = process.env.NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE_DATA_SUFFIX?.trim();
-
-if (!builderCode && !explicitSuffix) {
-  console.error("Set NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE or NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE_DATA_SUFFIX");
-  process.exit(1);
-}
-
-const suffix = explicitSuffix?.startsWith("0x")
-  ? explicitSuffix.slice(2)
-  : Attribution.toDataSuffix({ codes: [builderCode] }).slice(2);
-
+const BUILDER_CODE = "bc_dea2s719";
+const suffix = "62635f64656132733731390b0080218021802180218021802180218021";
 const withSuffix = (data) => `${data}${suffix}`;
 
 const abi = [
@@ -35,7 +24,7 @@ const abi = [
 const tap = encodeFunctionData({ abi, functionName: "tap", args: [3n] });
 const checkIn = encodeFunctionData({ abi, functionName: "checkIn" });
 
-console.log("Builder code:", builderCode ?? "(from explicit suffix only)");
+console.log("Builder code:", BUILDER_CODE);
 console.log("Suffix:", `0x${suffix}`);
 console.log("");
 console.log("tap(3):", withSuffix(tap));

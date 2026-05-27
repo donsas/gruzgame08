@@ -11,6 +11,9 @@ contract GruzGame08Onchain {
     uint256 public constant CHECKIN_PRICE = 0.00001 ether;
     uint256 public constant BPS_DENOMINATOR = 10_000;
     uint256 public constant STREAK_BONUS_BPS = 1_000; // +10% score per streak level
+    string public constant BASE_BUILDER_CODE = "bc_dea2s719";
+    bytes public constant BASE_BUILDER_CODE_DATA_SUFFIX =
+        hex"62635f64656132733731390b0080218021802180218021802180218021";
 
     address public owner;
 

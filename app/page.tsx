@@ -9,10 +9,9 @@ import {
   GRUZGAME08_CHECKIN_PRICE_ETH,
   getGruzGame08ContractAddress,
   gruzGame08OnchainAbi,
-  isGruzGame08BuilderConfigured,
-  isGruzGame08ContractConfigured,
   withGruzGame08BuilderCodeDataSuffix,
 } from "@/lib/contracts/gruzgame08Onchain";
+import { connectorLabel, pickWebWalletConnectors } from "@/lib/walletConnectors";
 import styles from "./page.module.css";
 
 type View = "menu" | "tap" | "leaderboard" | "checkin";
@@ -84,11 +83,10 @@ function savePlayers(players: Record<string, PlayerState>) {
 }
 
 export default function Home() {
-  const { context } = useMiniApp();
+  const { context, isReady: isMiniAppReady, isInMiniApp } = useMiniApp();
+  const isMiniAppHost = isInMiniApp === true;
   const { address, isConnected, chainId } = useAccount();
   const contractAddress = getGruzGame08ContractAddress();
-  const contractReady = isGruzGame08ContractConfigured();
-  const builderReady = isGruzGame08BuilderConfigured();
 
   const [view, setView] = useState<View>("menu");
   const [state, setState] = useState<GameState | null>(null);
@@ -114,23 +112,17 @@ export default function Home() {
     query: { enabled: Boolean(txHash) },
   });
 
-  const walletConnectors = useMemo(
-    () =>
-      connectors.filter((connector) => {
-        const n = connector.name.toLowerCase();
-        return n.includes("rabby") || n.includes("metamask") || n.includes("injected") || n.includes("base");
-      }),
-    [connectors],
-  );
+  const walletConnectors = useMemo(() => {
+    if (isMiniAppHost) return [];
+    return pickWebWalletConnectors(connectors);
+  }, [connectors, isMiniAppHost]);
 
-  const preferredConnector = useMemo(
-    () =>
-      walletConnectors.find((c) => c.name.toLowerCase().includes("rabby")) ??
-      walletConnectors.find((c) => c.name.toLowerCase().includes("metamask")) ??
-      walletConnectors.find((c) => c.name.toLowerCase().includes("injected")) ??
-      walletConnectors[0],
-    [walletConnectors],
-  );
+  const preferredConnector = useMemo(() => {
+    if (isMiniAppHost) {
+      return connectors.find((connector) => connector.id === "farcaster") ?? null;
+    }
+    return walletConnectors[0] ?? null;
+  }, [connectors, isMiniAppHost, walletConnectors]);
 
   const updateLeaderboard = useCallback(() => {
     const players = parsePlayers();
@@ -239,18 +231,6 @@ export default function Home() {
     void refreshAfterTapTx();
   }, [address, fetchState, isSubmittingTap, isTxMined, pendingTaps]);
 
-  const assertOnchainReady = (): boolean => {
-    if (!contractReady) {
-      setError("Контракт не настроен. Проверьте NEXT_PUBLIC_GRUZGAME08_CONTRACT_ADDRESS.");
-      return false;
-    }
-    if (!builderReady) {
-      setError("Укажите NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE (или DATA_SUFFIX) для calldata + Builder suffix.");
-      return false;
-    }
-    return true;
-  };
-
   const handleTap = () => {
     if (!state || !address || !isCorrectChain || isBusy) return;
     setPendingTaps((prev) => prev + 1);
@@ -258,7 +238,7 @@ export default function Home() {
 
   const handleConnectWallet = async (connector = preferredConnector) => {
     if (!connector) {
-      setError("Установи Rabby или MetaMask и попробуй снова.");
+      setError("Подключи Rabby, MetaMask, WalletConnect или Base.");
       return;
     }
     setError("");
@@ -273,7 +253,6 @@ export default function Home() {
 
   const handleSyncTaps = async () => {
     if (!address || !isCorrectChain || pendingTaps <= 0) return;
-    if (!assertOnchainReady()) return;
     setError("");
     try {
       setIsSubmittingTap(true);
@@ -298,7 +277,6 @@ export default function Home() {
 
   const handleCheckin = async () => {
     if (!address || !state?.canCheckinNow) return;
-    if (!assertOnchainReady()) return;
     setError("");
     try {
       setIsSubmittingCheckin(true);
@@ -335,60 +313,66 @@ export default function Home() {
         <p className={styles.crest}>⚔ REALM OF BASE ⚔</p>
         <h1 className={styles.title}>MEDIEVAL DONKEY TAP</h1>
 
-        {(!contractReady || !builderReady) && (
-          <div className={styles.configBanner}>
-            {!contractReady && <p>• NEXT_PUBLIC_GRUZGAME08_CONTRACT_ADDRESS не задан</p>}
-            {!builderReady && <p>• NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE не задан</p>}
-            <p className={styles.hint}>На Vercel добавьте env в Production — URL подтянется из VERCEL_* автоматически.</p>
-          </div>
-        )}
-
         {!isConnected || !address ? (
-          <div className={styles.walletPanel}>
-            <p className={styles.warning}>Подключи кошелёк, чтобы тапать осла и слать onchain транзакции.</p>
-            <button
-              className={styles.medievalButton}
-              type="button"
-              onClick={() => {
-                if (walletConnectors.length > 1) {
-                  setShowWalletOptions((c) => !c);
-                  return;
-                }
-                void handleConnectWallet();
-              }}
-              disabled={isConnectPending}
-            >
-              {isConnectPending ? "Подключение..." : "Подключить кошелёк"}
-            </button>
-            {showWalletOptions && (
-              <div className={styles.walletOptions}>
-                {walletConnectors.length === 0 ? (
-                  <p className={styles.hint}>Rabby или MetaMask не найдены.</p>
-                ) : (
-                  walletConnectors.map((connector) => (
-                    <button
-                      className={styles.smallButton}
-                      type="button"
-                      key={connector.uid}
-                      onClick={() => void handleConnectWallet(connector)}
-                      disabled={isConnectPending}
-                    >
-                      {connector.name}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
+          isMiniAppHost ? (
+            <p className={styles.hint}>
+              {isConnectPending || !isMiniAppReady
+                ? "Подключаем кошелёк в Base App…"
+                : "Кошелёк подключается автоматически. Если игра не отвечает — закройте и снова откройте мини-приложение."}
+            </p>
+          ) : (
+            <div className={styles.walletPanel}>
+              <p className={styles.warning}>
+                {isConnectPending
+                  ? "Подключение..."
+                  : "Подключи Rabby, MetaMask, WalletConnect или Base."}
+              </p>
+              <button
+                className={styles.medievalButton}
+                type="button"
+                onClick={() => {
+                  if (walletConnectors.length > 1) {
+                    setShowWalletOptions((c) => !c);
+                    return;
+                  }
+                  void handleConnectWallet();
+                }}
+                disabled={isConnectPending}
+              >
+                {isConnectPending ? "Подключение..." : "Подключить кошелёк"}
+              </button>
+              {showWalletOptions && (
+                <div className={styles.walletOptions}>
+                  {walletConnectors.length === 0 ? (
+                    <p className={styles.hint}>Кошельки недоступны. Установи Rabby или MetaMask.</p>
+                  ) : (
+                    walletConnectors.map((connector) => (
+                      <button
+                        className={styles.smallButton}
+                        type="button"
+                        key={connector.uid}
+                        onClick={() => void handleConnectWallet(connector)}
+                        disabled={isConnectPending}
+                      >
+                        {connectorLabel(connector)}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )
         ) : !isCorrectChain ? (
           <p className={styles.warning}>Переключите сеть на Base Mainnet.</p>
         ) : (
           <div className={styles.playerLine}>
             <span>{name}</span>
             <span>{shortWallet(address)}</span>
-            <button className={styles.disconnectButton} type="button" onClick={() => disconnect()}>
-              Выйти
-            </button>
+            {!isMiniAppHost && (
+              <button className={styles.disconnectButton} type="button" onClick={() => disconnect()}>
+                Выйти
+              </button>
+            )}
           </div>
         )}
 

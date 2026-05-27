@@ -1,4 +1,3 @@
-import { Attribution } from "ox/erc8021";
 import { isAddress } from "viem";
 
 export const GRUZGAME08_CHECKIN_PRICE_ETH = "0.00001";
@@ -8,6 +7,11 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 /** Deployed on Base Mainnet — https://basescan.org/address/0xE7cD8d5Ee95150cba37629B915aB3C7F63ec5aCe */
 export const GRUZGAME08_CONTRACT_ADDRESS_DEFAULT =
   "0xE7cD8d5Ee95150cba37629B915aB3C7F63ec5aCe" as const;
+
+/** base.dev → Builder Codes (gruzgame08) */
+export const GRUZGAME08_BUILDER_CODE = "bc_dea2s719";
+export const GRUZGAME08_BUILDER_CODE_DATA_SUFFIX =
+  "0x62635f64656132733731390b0080218021802180218021802180218021" as const;
 
 export const gruzGame08OnchainAbi = [
   {
@@ -26,7 +30,6 @@ export const gruzGame08OnchainAbi = [
   },
 ] as const;
 
-/** Env override (Vercel) or deployed default. */
 export function getGruzGame08ContractAddress(): `0x${string}` {
   const raw = process.env.NEXT_PUBLIC_GRUZGAME08_CONTRACT_ADDRESS?.trim();
   if (raw && isAddress(raw) && raw.toLowerCase() !== ZERO_ADDRESS) {
@@ -39,36 +42,18 @@ export function isGruzGame08ContractConfigured(): boolean {
   return isAddress(getGruzGame08ContractAddress());
 }
 
-/** Optional: NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE (e.g. bc_xxxxx from base.dev). */
-export function getGruzGame08BuilderCode(): string | null {
-  const code = process.env.NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE?.trim();
-  return code || null;
-}
-
-/**
- * ERC-8021 / Base builder suffix for calldata.
- * Prefer explicit NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE_DATA_SUFFIX; else derive from builder code via ox.
- */
-export function getGruzGame08BuilderCodeDataSuffix(): `0x${string}` {
-  const explicit = process.env.NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE_DATA_SUFFIX?.trim();
-  if (explicit?.startsWith("0x") && explicit.length > 2) {
-    return explicit as `0x${string}`;
-  }
-  const code = getGruzGame08BuilderCode();
-  if (!code) return "0x";
-  return Attribution.toDataSuffix({ codes: [code] });
-}
-
-export function isGruzGame08BuilderConfigured(): boolean {
-  const suffix = getGruzGame08BuilderCodeDataSuffix();
-  return suffix !== "0x" && suffix.length > 2;
-}
-
-/** Appends Builder Code encoded suffix to function calldata (tap / checkIn). */
 export function withGruzGame08BuilderCodeDataSuffix(data: `0x${string}`): `0x${string}` {
-  const suffix = getGruzGame08BuilderCodeDataSuffix();
+  const explicit = process.env.NEXT_PUBLIC_GRUZGAME08_BUILDER_CODE_DATA_SUFFIX?.trim();
+  const suffix =
+    explicit?.startsWith("0x") && explicit.length > 2
+      ? (explicit as `0x${string}`)
+      : GRUZGAME08_BUILDER_CODE_DATA_SUFFIX;
   if (!suffix || suffix === "0x" || suffix.length <= 2) {
     return data;
   }
   return `${data}${suffix.slice(2)}` as `0x${string}`;
+}
+
+export function isGruzGame08BuilderConfigured(): boolean {
+  return GRUZGAME08_BUILDER_CODE_DATA_SUFFIX.length > 2;
 }
